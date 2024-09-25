@@ -188,7 +188,7 @@ def update_chart(inputs: dict, function_selection: str):
     if chart_selected == Charts.t_rh.value.name:
         if (
             selected_model == Models.PMV_EN.name
-            and function_selection != Functionalities.Ranges.value
+            and function_selection == Functionalities.Default.value
         ):
             image = t_rh_pmv(
                 inputs=inputs,
