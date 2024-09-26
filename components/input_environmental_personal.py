@@ -483,7 +483,6 @@ def input_environmental_personal(
     prevent_initial_call=True,
 )
 def handle_modal(clo_value, _nc_open, _nc_close, _nc_submit, opened, selected_model):
-
     ctx = dash.callback_context.triggered_id
 
     if ctx == ElementsIDs.modal_custom_ensemble_open.value:
@@ -548,22 +547,23 @@ def create_select_component(values: ModelInputsInfo):
     )
 
 
+MIN_MAX_RANGES = {
+    "metabolic_rate": {
+        "PMV_ashrae": (1.0, 4.0),
+        "PMV_EN": (0.8, 4.0),
+    },
+    "clothing_level": {
+        "PMV_ashrae": (0.0, 1.5),
+        "PMV_EN": (0.0, 2.0),
+    },
+}
+
+
 def get_min_max_range(model, input_type):
-    ranges = {
-        "metabolic_rate": {
-            "PMV_ashrae": (1.0, 4.0),
-            "PMV_EN": (0.8, 4.0),
-        },
-        "clothing_level": {
-            "PMV_ashrae": (0.0, 1.5),
-            "PMV_EN": (0.0, 2.0),
-        },
-    }
-    return ranges.get(input_type, {}).get(model, (1.0, 4.0))
+    return MIN_MAX_RANGES.get(input_type, {}).get(model, (1.0, 4.0))
 
 
 def update_options(input_value, selection_enum, model, input_type):
-
     min_value, max_value = get_min_max_range(model, input_type)
 
     if input_value is None or input_value == "":
@@ -581,12 +581,9 @@ def update_options(input_value, selection_enum, model, input_type):
         elif input_number > max_value:
             return option_values, max_value
 
-        # input_number = float(input_value)
         filtered_options = []
         for option in selection_enum:
-            # Extract the value
             option_value = float(option.value.split(":")[-1].strip().split()[0])
-            # Perform comparison
             if abs(option_value - input_number) < 1:
                 filtered_options.append(option.value)
 
@@ -602,56 +599,83 @@ def update_options(input_value, selection_enum, model, input_type):
     return filtered_options, input_value
 
 
-@callback(
-    Output(ElementsIDs.met_input.value, "data"),
-    Output(ElementsIDs.met_input.value, "value"),
-    Input(ElementsIDs.met_input.value, "value"),
-    State(ElementsIDs.met_input.value, "data"),
-    State(ElementsIDs.MODEL_SELECTION.value, "value"),
-)
-def update_metabolic_rate_options(input_value, _, selected_model):
-    return update_options(
-        input_value, MetabolicRateSelection, selected_model, "metabolic_rate"
+def create_and_update_callback(element_id, selection_enum, input_type):
+    @callback(
+        Output(element_id, "data"),
+        Output(element_id, "value"),
+        Input(element_id, "value"),
+        State(element_id, "data"),
+        State(ElementsIDs.MODEL_SELECTION.value, "value"),
     )
+    def callback_function(input_value, _, selected_model):
+        return update_options(input_value, selection_enum, selected_model, input_type)
+
+    return callback_function
 
 
-@callback(
-    Output(ElementsIDs.clo_input.value, "data"),
-    Output(ElementsIDs.clo_input.value, "value"),
-    Input(ElementsIDs.clo_input.value, "value"),
-    State(ElementsIDs.clo_input.value, "data"),
-    State(ElementsIDs.MODEL_SELECTION.value, "value"),
+# @callback(
+#     Output(ElementsIDs.met_input.value, "data"),
+#     Output(ElementsIDs.met_input.value, "value"),
+#     Input(ElementsIDs.met_input.value, "value"),
+#     State(ElementsIDs.met_input.value, "data"),
+#     State(ElementsIDs.MODEL_SELECTION.value, "value"),
+# )
+# def update_metabolic_rate_options(input_value, _, selected_model):
+#     return update_options(
+#         input_value, MetabolicRateSelection, selected_model, "metabolic_rate"
+#     )
+#
+#
+# @callback(
+#     Output(ElementsIDs.clo_input.value, "data"),
+#     Output(ElementsIDs.clo_input.value, "value"),
+#     Input(ElementsIDs.clo_input.value, "value"),
+#     State(ElementsIDs.clo_input.value, "data"),
+#     State(ElementsIDs.MODEL_SELECTION.value, "value"),
+# )
+# def update_clothing_level_options(input_value, _, selected_model):
+#     return update_options(
+#         input_value, ClothingSelection, selected_model, "clothing_level"
+#     )
+#
+#
+# @callback(
+#     Output(ElementsIDs.met_input_input2.value, "data"),
+#     Output(ElementsIDs.met_input_input2.value, "value"),
+#     Input(ElementsIDs.met_input_input2.value, "value"),
+#     State(ElementsIDs.met_input_input2.value, "data"),
+#     State(ElementsIDs.MODEL_SELECTION.value, "value"),
+# )
+# def update_metabolic_rate_options(input_value, _, selected_model):
+#     return update_options(
+#         input_value, MetabolicRateSelection, selected_model, "metabolic_rate"
+#     )
+#
+#
+# @callback(
+#     Output(ElementsIDs.clo_input_input2.value, "data"),
+#     Output(ElementsIDs.clo_input_input2.value, "value"),
+#     Input(ElementsIDs.clo_input_input2.value, "value"),
+#     State(ElementsIDs.clo_input_input2.value, "data"),
+#     State(ElementsIDs.MODEL_SELECTION.value, "value"),
+# )
+# def update_clothing_level_options(input_value, _, selected_model):
+#     return update_options(
+#         input_value, ClothingSelection, selected_model, "clothing_level"
+#     )
+
+update_metabolic_rate_options = create_and_update_callback(
+    ElementsIDs.met_input.value, MetabolicRateSelection, "metabolic_rate"
 )
-def update_clothing_level_options(input_value, _, selected_model):
-    return update_options(
-        input_value, ClothingSelection, selected_model, "clothing_level"
-    )
-
-
-@callback(
-    Output(ElementsIDs.met_input_input2.value, "data"),
-    Output(ElementsIDs.met_input_input2.value, "value"),
-    Input(ElementsIDs.met_input_input2.value, "value"),
-    State(ElementsIDs.met_input_input2.value, "data"),
-    State(ElementsIDs.MODEL_SELECTION.value, "value"),
+update_clothing_level_options = create_and_update_callback(
+    ElementsIDs.clo_input.value, ClothingSelection, "clothing_level"
 )
-def update_metabolic_rate_options(input_value, _, selected_model):
-    return update_options(
-        input_value, MetabolicRateSelection, selected_model, "metabolic_rate"
-    )
-
-
-@callback(
-    Output(ElementsIDs.clo_input_input2.value, "data"),
-    Output(ElementsIDs.clo_input_input2.value, "value"),
-    Input(ElementsIDs.clo_input_input2.value, "value"),
-    State(ElementsIDs.clo_input_input2.value, "data"),
-    State(ElementsIDs.MODEL_SELECTION.value, "value"),
+update_metabolic_rate_options_input2 = create_and_update_callback(
+    ElementsIDs.met_input_input2.value, MetabolicRateSelection, "metabolic_rate"
 )
-def update_clothing_level_options(input_value, _, selected_model):
-    return update_options(
-        input_value, ClothingSelection, selected_model, "clothing_level"
-    )
+update_clothing_level_options_input2 = create_and_update_callback(
+    ElementsIDs.clo_input_input2.value, ClothingSelection, "clothing_level"
+)
 
 
 @callback(
