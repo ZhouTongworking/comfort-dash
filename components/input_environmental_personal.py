@@ -559,7 +559,7 @@ def get_min_max_range(model, input_type):
             "PMV_EN": (0.0, 2.0),
         },
     }
-    return ranges.get(input_type, {}).get(model, (0.0, 4.0))
+    return ranges.get(input_type, {}).get(model, (1.0, 4.0))
 
 
 def update_options(input_value, selection_enum, model, input_type):
