@@ -523,6 +523,7 @@ def handle_modal(clo_value, _nc_open, _nc_close, _nc_submit, opened, selected_mo
 
     return opened, dash.no_update, "none", dash.no_update
 
+
 def create_autocomplete(values: ModelInputsInfo):
     return dmc.Autocomplete(
         id=values.id,
