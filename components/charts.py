@@ -182,7 +182,8 @@ def adaptive_chart(
             ticklen=5,
             showline=True,
             linewidth=1.5,
-            linecolor="black",
+            linecolor="lightgray",
+            mirror=True,
         ),
         yaxis=dict(
             title=(
@@ -199,12 +200,16 @@ def adaptive_chart(
             ticklen=5,
             showline=True,
             linewidth=1.5,
-            linecolor="black",
+            linecolor="lightgray",
+            mirror=True,
         ),
         legend=dict(x=0.8, y=1),
         showlegend=False,
-        plot_bgcolor="white",
-        margin=dict(l=40, r=40, t=40, b=40),
+        # plot_bgcolor="white",
+        template="plotly_white",
+        # margin=dict(l=40, r=40, t=40, b=40),
+        width=700,
+        height=525,
     )
 
     fig = go.Figure(data=traces, layout=layout)
