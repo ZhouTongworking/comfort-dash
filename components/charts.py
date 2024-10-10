@@ -71,9 +71,11 @@ def compare_get_inputs(inputs):
     return met_2, clo_2, tr_2, t_db_2, v_2, rh_2
 
 
-def adaptive_chart(inputs: dict = None,
-                   model: str = "iso",
-                   units: str = "SI", ):
+def adaptive_chart(
+    inputs: dict = None,
+    model: str = "iso",
+    units: str = "SI",
+):
     traces = []
 
     if units == UnitSystem.IP.value:
@@ -158,12 +160,16 @@ def adaptive_chart(inputs: dict = None,
 
     layout = go.Layout(
         xaxis=dict(
-            title="Outdoor Running Mean Temperature [°C]" if units == UnitSystem.SI.value else "Prevailing Mean Outdoor Temperature [°F]",
+            title=(
+                "Outdoor Running Mean Temperature [°C]"
+                if units == UnitSystem.SI.value
+                else "Prevailing Mean Outdoor Temperature [°F]"
+            ),
             range=[10, 30] if model == "iso" else [10, 33.5],
             dtick=2 if units == UnitSystem.SI.value else 5,
             showgrid=True,
             gridcolor="lightgray",
-            gridwidth=1.5,
+            gridwidth=1,
             ticks="outside",
             ticklen=5,
             showline=True,
@@ -171,12 +177,16 @@ def adaptive_chart(inputs: dict = None,
             linecolor="black",
         ),
         yaxis=dict(
-            title="Operative Temperature [°C]" if units == UnitSystem.SI.value else "Operative Temperature [°F]",
+            title=(
+                "Operative Temperature [°C]"
+                if units == UnitSystem.SI.value
+                else "Operative Temperature [°F]"
+            ),
             range=[14, 36] if units == UnitSystem.SI.value else [60, 104],
             dtick=2 if units == UnitSystem.SI.value else 5,
             showgrid=True,
             gridcolor="lightgray",
-            gridwidth=1.5,
+            gridwidth=1,
             ticks="outside",
             ticklen=5,
             showline=True,
@@ -194,8 +204,14 @@ def adaptive_chart(inputs: dict = None,
     if units == UnitSystem.IP.value:
         fig.update_layout(
             xaxis=dict(
-                range=[50, 92.3] if model == "iso" else [UnitConverter.celsius_to_fahrenheit(10),
-                                                         UnitConverter.celsius_to_fahrenheit(33.5)],
+                range=(
+                    [50, 92.3]
+                    if model == "iso"
+                    else [
+                        UnitConverter.celsius_to_fahrenheit(10),
+                        UnitConverter.celsius_to_fahrenheit(33.5),
+                    ]
+                ),
             ),
         )
 
@@ -203,10 +219,10 @@ def adaptive_chart(inputs: dict = None,
 
 
 def t_rh_pmv(
-        inputs: dict = None,
-        model: str = "iso",
-        function_selection: str = Functionalities.Default,
-        units: str = "SI",
+    inputs: dict = None,
+    model: str = "iso",
+    function_selection: str = Functionalities.Default,
+    units: str = "SI",
 ):
     results = []
     if model == "iso":
@@ -230,21 +246,22 @@ def t_rh_pmv(
         results = []
         for pmv_limit in pmv_limits:
             for rh in np.arange(0, 110, 10):
+
                 def function(x):
                     return (
-                            pmv(
-                                x,
-                                tr=tr,
-                                vr=vr,
-                                rh=rh,
-                                met=met,
-                                clo=clo,
-                                wme=0,
-                                standard=model,
-                                units=units,
-                                limit_inputs=False,
-                            )
-                            - pmv_limit
+                        pmv(
+                            x,
+                            tr=tr,
+                            vr=vr,
+                            rh=rh,
+                            met=met,
+                            clo=clo,
+                            wme=0,
+                            standard=model,
+                            units=units,
+                            limit_inputs=False,
+                        )
+                        - pmv_limit
                     )
 
                 try:
@@ -329,7 +346,7 @@ def t_rh_pmv(
                 mode="lines",
                 line=dict(color="rgba(30,70,100,0.5)"),
                 name=f"{model} Compare Lower Limit",
-                hoverinfo='skip'
+                hoverinfo="skip",
             )
         )
         fig.add_trace(
@@ -341,7 +358,7 @@ def t_rh_pmv(
                 fillcolor="rgba(30,70,100,0.5)",
                 line=dict(color="rgba(30,70,100,0.5)"),
                 name=f"{model} Compare Upper Limit",
-                hoverinfo='skip'
+                hoverinfo="skip",
             )
         )
         fig.add_trace(
@@ -351,7 +368,7 @@ def t_rh_pmv(
                 mode="markers",
                 marker=dict(color="blue", size=8),
                 name="Compare Input",
-                hoverinfo='skip'
+                hoverinfo="skip",
             )
         )
 
@@ -375,10 +392,10 @@ def t_rh_pmv(
 
 
 def t_rh_pmv_category(
-        inputs: dict = None,
-        model: str = "iso",
-        function_selection: str = "Default",
-        units: str = "SI",
+    inputs: dict = None,
+    model: str = "iso",
+    function_selection: str = "Default",
+    units: str = "SI",
 ):
     results = []
     # Specifies the category of the PMV interval
@@ -405,37 +422,37 @@ def t_rh_pmv_category(
             # Find the upper and lower limits of temperature
             def function(x):
                 return (
-                        pmv(
-                            x,
-                            tr=inputs[ElementsIDs.t_r_input.value],
-                            vr=vr,
-                            rh=rh,
-                            met=inputs[ElementsIDs.met_input.value],
-                            clo=clo_d,
-                            wme=0,
-                            standard=model,
-                            limit_inputs=False,
-                            units=units,
-                        )
-                        - lower_limit
+                    pmv(
+                        x,
+                        tr=inputs[ElementsIDs.t_r_input.value],
+                        vr=vr,
+                        rh=rh,
+                        met=inputs[ElementsIDs.met_input.value],
+                        clo=clo_d,
+                        wme=0,
+                        standard=model,
+                        limit_inputs=False,
+                        units=units,
+                    )
+                    - lower_limit
                 )
 
             temp_lower = optimize.brentq(function, 10, 120)
 
             def function_upper(x):
                 return (
-                        pmv(
-                            x,
-                            tr=inputs[ElementsIDs.t_r_input.value],
-                            vr=vr,
-                            rh=rh,
-                            met=inputs[ElementsIDs.met_input.value],
-                            clo=clo_d,
-                            wme=0,
-                            standard=model,
-                            limit_inputs=False,
-                        )
-                        - upper_limit
+                    pmv(
+                        x,
+                        tr=inputs[ElementsIDs.t_r_input.value],
+                        vr=vr,
+                        rh=rh,
+                        met=inputs[ElementsIDs.met_input.value],
+                        clo=clo_d,
+                        wme=0,
+                        standard=model,
+                        limit_inputs=False,
+                    )
+                    - upper_limit
                 )
 
             temp_upper = optimize.brentq(function_upper, 10, 120)
@@ -457,7 +474,7 @@ def t_rh_pmv_category(
         region_data = df[
             (df["pmv_lower_limit"] == pmv_limits[i])
             & (df["pmv_upper_limit"] == pmv_limits[i + 1])
-            ]
+        ]
         # Draw the temperature line at the bottom
         fig.add_trace(
             go.Scatter(
@@ -517,7 +534,7 @@ def t_rh_pmv_category(
 
 
 def pmot_ot_adaptive_ashrae(
-        inputs: dict = None, model: str = "ashrae", units: str = "SI"
+    inputs: dict = None, model: str = "ashrae", units: str = "SI"
 ):
     # Input parameter
     air_temperature = inputs[ElementsIDs.t_db_input.value]  # Air Temperature

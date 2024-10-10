@@ -193,7 +193,7 @@ def display_results(inputs: dict):
         results.append(
             dmc.Center(
                 dmc.Text(
-                    f"80% acceptability limits = Operative temperature: {round(adaptive.tmp_cmf_90_low,1)} to {round(adaptive.tmp_cmf_90_up,1)} {temp_unit}"
+                    f"90% acceptability limits = Operative temperature: {round(adaptive.tmp_cmf_90_low,1)} to {round(adaptive.tmp_cmf_90_up,1)} {temp_unit}"
                 )
             )
         )
