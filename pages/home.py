@@ -5,8 +5,7 @@ from dash import html, callback, Output, Input, no_update, State, ctx, dcc
 from components.charts import (
     t_rh_pmv,
     chart_selector,
-    t_rh_pmv_category,
-    pmot_ot_adaptive_ashrae, adaptive_chart,
+    adaptive_chart,
 )
 from components.dropdowns import (
     model_selection,
