@@ -297,7 +297,7 @@ def display_results(inputs: dict):
             units=units,
         )
     elif selected_model == Models.Adaptive_ASHRAE.name:
-        results = gain_adaptive_ashare_hover_text(
+        results = e_hover_textrae_hover_text(
             tdb=inputs[ElementsIDs.t_db_input.value],
             tr=inputs[ElementsIDs.t_r_input.value],
             trm=inputs[ElementsIDs.t_rm_input.value],
@@ -407,7 +407,7 @@ def gain_adaptive_en_hover_text(tdb, tr, trm, v, units):
     return results
 
 
-def gain_adaptive_ashare_hover_text(tdb, tr, trm, v, units):
+def gain_adaptive_ashrae_hover_text(tdb, tr, trm, v, units):
     if tdb is None or tr is None or trm is None or v is None:
         return "None"
 
