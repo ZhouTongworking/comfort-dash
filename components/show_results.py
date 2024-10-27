@@ -3,12 +3,9 @@ from pythermalcomfort.models import pmv_ppd, adaptive_ashrae
 from pythermalcomfort.utilities import v_relative, clo_dynamic, mapping
 from pythermalcomfort.models import adaptive_en, set_tmp, pmv_ppd, cooling_effect
 from pythermalcomfort.psychrometrics import t_o
-
-from utils.get_inputs import get_inputs
 from utils.my_config_file import (
     Models,
     UnitSystem,
-    UnitConverter,
     ElementsIDs,
     Functionalities,
     CompareInputColor,
@@ -17,407 +14,278 @@ from utils.my_config_file import (
 )
 
 
+def create_text_component(text, color=None, center=True):
+    text_component = dmc.Text(text, style={"color": color} if color else {})
+    return dmc.Center(text_component) if center else text_component
+
+
+def format_value_with_unit(value, units, has_decimals=True):
+    temp_unit = "°F" if units == UnitSystem.IP.value else "°C"
+    format_str = f"{value:.1f}" if has_decimals else str(value)
+    return f"{format_str} {temp_unit}"
+
+
+def create_pmv_display_items(pmv_results, set_temperature, comfort_category=None, units=None):
+    base_items = [
+        ("PMV", f"{pmv_results['pmv']:.2f}"),
+        ("PPD", f"{pmv_results['ppd']:.1f} %"),
+    ]
+
+    if units:
+        base_items.append(("SET", format_value_with_unit(set_temperature, units)))
+
+    if comfort_category is not None:
+        category_label = "Sensation" if comfort_category in ["Cold", "Cool", "Slightly Cool", "Neutral",
+                                                             "Slightly Warm", "Warm", "Hot"] else "Category"
+        base_items.append((category_label, comfort_category))
+
+    return base_items
+
+
+def calculate_pmv_results(inputs, is_input2=False, units=None, standard="ISO"):
+    suffix = "_input2" if is_input2 else ""
+
+    r_pmv = pmv_ppd(
+        tdb=inputs[getattr(ElementsIDs, f"t_db_input{suffix}").value],
+        tr=inputs[getattr(ElementsIDs, f"t_r_input{suffix}").value],
+        vr=v_relative(
+            v=inputs[getattr(ElementsIDs, f"v_input{suffix}").value],
+            met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        ),
+        rh=inputs[getattr(ElementsIDs, f"rh_input{suffix}").value],
+        met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        clo=clo_dynamic(
+            clo=inputs[getattr(ElementsIDs, f"clo_input{suffix}").value],
+            met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        ),
+        wme=0,
+        limit_inputs=True,
+        units=units,
+        standard=standard,
+    )
+
+    r_set = set_tmp(
+        tdb=inputs[getattr(ElementsIDs, f"t_db_input{suffix}").value],
+        tr=inputs[getattr(ElementsIDs, f"t_r_input{suffix}").value],
+        v=v_relative(
+            v=inputs[getattr(ElementsIDs, f"v_input{suffix}").value],
+            met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        ),
+        rh=inputs[getattr(ElementsIDs, f"rh_input{suffix}").value],
+        met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        clo=clo_dynamic(
+            clo=inputs[getattr(ElementsIDs, f"clo_input{suffix}").value],
+            met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        ),
+        wme=0,
+        limit_inputs=True,
+        units=units,
+        standard=standard,
+    )
+
+    r_cooling = cooling_effect(
+        tdb=inputs[getattr(ElementsIDs, f"t_db_input{suffix}").value],
+        tr=inputs[getattr(ElementsIDs, f"t_r_input{suffix}").value],
+        vr=v_relative(
+            v=inputs[getattr(ElementsIDs, f"v_input{suffix}").value],
+            met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        ),
+        rh=inputs[getattr(ElementsIDs, f"rh_input{suffix}").value],
+        met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        clo=clo_dynamic(
+            clo=inputs[getattr(ElementsIDs, f"clo_input{suffix}").value],
+            met=inputs[getattr(ElementsIDs, f"met_input{suffix}").value],
+        ),
+        wme=0,
+        units=units,
+    )
+
+    return r_pmv, r_set, r_cooling
+
+
+def check_compliance(pmv_value, is_ashrae):
+    if is_ashrae:
+        is_compliant = -0.5 <= pmv_value <= 0.5
+        text = "✔" if is_compliant else "✘"
+    else:
+        is_compliant = -0.7 <= pmv_value <= 0.7
+        text = "✔" if is_compliant else "✘"
+    color = "green" if is_compliant else "red"
+    return text, color
+
+
+def create_compare_first_col(units):
+    base_titles = [
+        "Compliance",
+        "PMV",
+        "PPD",
+        "Sensation",
+        "SET",
+    ]
+
+    if units == UnitSystem.IP.value:
+        base_titles.extend([
+            "Dry-bulb temp at still air",
+            "Cooling effect"
+        ])
+
+    return [
+        dmc.Stack(
+            children=[dmc.Center(dmc.Text(title)) for title in base_titles],
+            gap=5,
+            style={"textAlign": "left", "width": "100%"},
+        )
+    ]
+
+
+def get_comfort_category(pmv_value, model):
+    if model == Models.PMV_ashrae.name:
+        return mapping(
+            pmv_value,
+            {
+                -2.5: "Cold",
+                -1.5: "Cool",
+                -0.5: "Slightly Cool",
+                0.5: "Neutral",
+                1.5: "Slightly Warm",
+                2.5: "Warm",
+                10: "Hot",
+            },
+        )
+    else:
+        return mapping(
+            abs(pmv_value),
+            {0.2: "I", 0.5: "II", 0.7: "III", float("inf"): "IV"}
+        )
+
+
+def create_default_result(pmv_results, set_temperature, comfort_category, model, units):
+    is_ashrae = model == Models.PMV_ashrae.name
+    compliance_text = "✔  Complies with " + ("ASHRAE Standard 55-2023" if is_ashrae else "EN-16798")
+    if (is_ashrae and not (-0.5 <= pmv_results["pmv"] <= 0.5)) or (
+            not is_ashrae and not (-0.7 <= pmv_results["pmv"] <= 0.7)):
+        compliance_text = "✘  Does not comply with " + ("ASHRAE Standard 55-2023" if is_ashrae else "EN-16798")
+        compliance_color = "red"
+    else:
+        compliance_color = "green"
+
+    standard_checker = dmc.Text(
+        compliance_text,
+        c=compliance_color,
+        ta="center",
+        size="md",
+        style={"width": "100%"},
+    )
+
+    grid_children = [
+        create_text_component(f"{label}: {value}")
+        for label, value in create_pmv_display_items(
+            pmv_results,
+            set_temperature,
+            comfort_category,
+            units if is_ashrae else None
+        )
+    ]
+
+    results = [
+        standard_checker,
+        dmc.SimpleGrid(
+            cols=3 if not is_ashrae else 2,
+            spacing="xs",
+            verticalSpacing="xs",
+            children=grid_children,
+        ),
+    ]
+
+    for child in results[1].children:
+        if isinstance(child, dmc.Center) and isinstance(child.children, dmc.Text):
+            child.children.style = {"color": CompareInputColor.InputColor1.value}
+
+    return results
+
+
+def create_result_stack(pmv_results, set_temperature, cooling_result, t_db, units, color):
+    comfort_category = mapping(
+        pmv_results["pmv"],
+        {
+            -2.5: "Cold",
+            -1.5: "Cool",
+            -0.5: "Slightly Cool",
+            0.5: "Neutral",
+            1.5: "Slightly Warm",
+            2.5: "Warm",
+            10: "Hot",
+        },
+    )
+
+    compliance_text, compliance_color = check_compliance(pmv_results["pmv"], True)
+
+    children = [create_text_component(compliance_text, compliance_color)]
+
+    display_items = create_pmv_display_items(pmv_results, set_temperature, comfort_category, units)
+    children.extend(create_text_component(value) for _, value in display_items)
+
+    if units == UnitSystem.IP.value:
+        children.extend([
+            create_text_component(f"{t_db}"),
+            create_text_component(f"{cooling_result:.1f}")
+        ])
+
+    stack = dmc.Stack(
+        children=children,
+        gap=5,
+        style={"textAlign": "center", "width": "100%"},
+    )
+
+    for child in stack.children[1:]:
+        if isinstance(child, dmc.Center) and isinstance(child.children, dmc.Text):
+            child.children.style = {"color": color}
+
+    return stack
+
+
 def display_results(inputs: dict):
     selected_model: str = inputs[ElementsIDs.MODEL_SELECTION.value]
     units: str = inputs[ElementsIDs.UNIT_TOGGLE.value]
-
     results = []
-    columns: int = 2
-    if selected_model == Models.PMV_EN.name or selected_model == Models.PMV_ashrae.name:
-        columns = 3
-        standard = "ISO"
-        if selected_model == Models.PMV_ashrae.name:
-            standard = "ashrae"
 
-        r_pmv = pmv_ppd(
-            tdb=inputs[ElementsIDs.t_db_input.value],
-            tr=inputs[ElementsIDs.t_r_input.value],
-            vr=v_relative(
-                v=inputs[ElementsIDs.v_input.value],
-                met=inputs[ElementsIDs.met_input.value],
-            ),
-            rh=inputs[ElementsIDs.rh_input.value],
-            met=inputs[ElementsIDs.met_input.value],
-            clo=clo_dynamic(
-                clo=inputs[ElementsIDs.clo_input.value],
-                met=inputs[ElementsIDs.met_input.value],
-            ),
-            wme=0,
-            limit_inputs=True,
-            units=units,
-            standard=standard,
-        )
-        r_set_tmp = set_tmp(
-            tdb=inputs[ElementsIDs.t_db_input.value],
-            tr=inputs[ElementsIDs.t_r_input.value],
-            v=v_relative(
-                v=inputs[ElementsIDs.v_input.value],
-                met=inputs[ElementsIDs.met_input.value],
-            ),
-            rh=inputs[ElementsIDs.rh_input.value],
-            met=inputs[ElementsIDs.met_input.value],
-            clo=clo_dynamic(
-                clo=inputs[ElementsIDs.clo_input.value],
-                met=inputs[ElementsIDs.met_input.value],
-            ),
-            wme=0,
-            limit_inputs=True,
-            units=units,
-            standard=standard,
-        )
-        r_cooling_effect = cooling_effect(
-            tdb=inputs[ElementsIDs.t_db_input.value],
-            tr=inputs[ElementsIDs.t_r_input.value],
-            vr=v_relative(
-                v=inputs[ElementsIDs.v_input.value],
-                met=inputs[ElementsIDs.met_input.value],
-            ),
-            rh=inputs[ElementsIDs.rh_input.value],
-            met=inputs[ElementsIDs.met_input.value],
-            clo=clo_dynamic(
-                clo=inputs[ElementsIDs.clo_input.value],
-                met=inputs[ElementsIDs.met_input.value],
-            ),
-            wme=0,
-            units=units,
-        )
+    if selected_model in [Models.PMV_EN.name, Models.PMV_ashrae.name]:
+        standard = "ashrae" if selected_model == Models.PMV_ashrae.name else "ISO"
 
-        # Standard Checker for PMV
-        # todo: need to add standard for adaptive methods by ensure if the current red point out of area
-        if selected_model == Models.PMV_ashrae.name:
-            if -0.5 <= r_pmv["pmv"] <= 0.5:
-                compliance_text = "✔  Complies with ASHRAE Standard 55-2023"
-                compliance_color = "green"
-            else:
-                compliance_text = "✘  Does not comply with ASHRAE Standard 55-2023"
-                compliance_color = "red"
-        else:  # EN
-            if -0.7 <= r_pmv["pmv"] <= 0.7:
-                compliance_text = "✔  Complies with EN-16798"
-                compliance_color = "green"
-            else:
-                compliance_text = "✘  Does not comply with EN-16798"
-                compliance_color = "red"
+        if (inputs[ElementsIDs.functionality_selection.value] == Functionalities.Compare.value
+                and selected_model == Models.PMV_ashrae.name):
 
-        standard_checker = dmc.Text(
-            compliance_text,
-            c=compliance_color,
-            ta="center",
-            size="md",
-            style={"width": "100%"},
-        )
-        temp_unit = "°F" if units == UnitSystem.IP.value else "°C"
-        if selected_model == Models.PMV_ashrae.name:
-            results = [
-                standard_checker,
-                dmc.SimpleGrid(
-                    cols=2,
-                    spacing="xs",
-                    verticalSpacing="xs",
-                    children=[
-                        dmc.Center(dmc.Text(f"PMV: {r_pmv['pmv']:.2f}")),
-                        dmc.Center(dmc.Text(f"PPD: {r_pmv['ppd']:.1f} %")),
-                        dmc.Center(dmc.Text(f"SET: {r_set_tmp:.1f} {temp_unit}")),
-                    ],
-                ),
-            ]
-        elif selected_model == Models.PMV_EN.name:
-            results = [
-                standard_checker,
-                dmc.SimpleGrid(
-                    cols=columns,
-                    spacing="xs",
-                    verticalSpacing="xs",
-                    children=[
-                        dmc.Center(dmc.Text(f"PMV: {r_pmv['pmv']:.2f}")),
-                        dmc.Center(dmc.Text(f"PPD: {r_pmv['ppd']:.1f} %")),
-                    ],
-                ),
-            ]
+            results_title = create_compare_first_col(units)
+            r_pmv, r_set, r_cooling = calculate_pmv_results(inputs, False, units, standard)
+            r_pmv2, r_set2, r_cooling2 = calculate_pmv_results(inputs, True, units, standard)
 
-        if selected_model == Models.PMV_ashrae.name:
-            comfort_category = mapping(
-                r_pmv["pmv"],
-                {
-                    -2.5: "Cold",
-                    -1.5: "Cool",
-                    -0.5: "Slightly Cool",
-                    0.5: "Neutral",
-                    1.5: "Slightly Warm",
-                    2.5: "Warm",
-                    10: "Hot",
-                },
-            )
-            results[1].children.append(
-                dmc.Center(dmc.Text(f"Sensation: {comfort_category}"))
-            )
-        elif selected_model == Models.PMV_EN.name:
-            comfort_category = mapping(
-                abs(r_pmv["pmv"]), {0.2: "I", 0.5: "II", 0.7: "III", float("inf"): "IV"}
-            )
-            results[1].children.append(
-                dmc.Center(dmc.Text(f"Category: {comfort_category}"))
-            )
-        # Modify the colour
-        for i in range(1, len(results)):
-            if i == 1 or i == 2:
-                color = (
-                    CompareInputColor.InputColor1.value
-                    if i == 1
-                    else CompareInputColor.InputColor2.value
-                )
-                for child in results[i].children:
-                    if isinstance(child, dmc.Center) and isinstance(
-                        child.children, dmc.Text
-                    ):
-                        child.children.style = {"color": color}
-
-        if (
-            inputs[ElementsIDs.functionality_selection.value]
-            == Functionalities.Compare.value
-            and selected_model == Models.PMV_ashrae.name
-        ):
-            if -0.5 <= r_pmv["pmv"] <= 0.5:
-                compliance_text = "✔"
-                compliance_color = "green"
-            else:
-                compliance_text = "✘"
-                compliance_color = "red"
-        else:  # en
-            if -0.7 <= r_pmv["pmv"] <= 0.7:
-                compliance_text = "✔"
-                compliance_color = "green"
-            else:
-                compliance_text = "✘"
-                compliance_color = "red"
-        if (
-            inputs[ElementsIDs.functionality_selection.value]
-            == Functionalities.Compare.value
-            and selected_model == Models.PMV_ashrae.name
-        ):
-
-            if units == UnitSystem.SI.value:
-                results_title = [
-                    dmc.Stack(
-                        children=[
-                            dmc.Center(dmc.Text("Compliance")),
-                            dmc.Center(dmc.Text("PMV")),
-                            dmc.Center(dmc.Text("PPD")),
-                            dmc.Center(dmc.Text("Sensation")),
-                            dmc.Center(dmc.Text("SET")),
-                        ],
-                        gap=5,
-                        style={"textAlign": "left", "width": "100%"},
-                    ),
-                ]
-            else:
-                results_title = [
-                    dmc.Stack(
-                        children=[
-                            dmc.Center(dmc.Text("Compliance")),
-                            dmc.Center(dmc.Text("PMV with elevated air speed")),
-                            dmc.Center(dmc.Text("PPD with elevated air speed")),
-                            dmc.Center(dmc.Text("Sensation")),
-                            dmc.Center(dmc.Text("SET")),
-                            dmc.Center(dmc.Text("Dry-bulb temp at still air")),
-                            dmc.Center(dmc.Text("Cooling effect")),
-                        ],
-                        gap=5,
-                        style={"textAlign": "left", "width": "100%"},
-                    ),
-                ]
-
-            results = [
-                dmc.Stack(
-                    children=[
-                        dmc.Center(
-                            dmc.Text(
-                                f"{compliance_text}", style={"color": compliance_color}
-                            )
-                        ),
-                        dmc.Center(dmc.Text(f"{r_pmv['pmv']:.2f}")),
-                        dmc.Center(dmc.Text(f"{r_pmv['ppd']:.1f} %")),
-                    ],
-                    gap=5,
-                    style={"textAlign": "center", "width": "100%"},
-                ),
-            ]
-
-            results[0].children.append(dmc.Center(dmc.Text(f"{comfort_category}")))
-
-            temp_unit = "°F" if units == UnitSystem.IP.value else "°C"
-            if units == UnitSystem.SI.value:
-
-                results[0].children.append(
-                    dmc.Center(dmc.Text(f"{r_set_tmp:.1f} {temp_unit}"))
-                )
-
-            else:
-
-                results[0].children.append(
-                    dmc.Center(dmc.Text(f"{r_set_tmp:.1f} {temp_unit}"))
-                )
-                results[0].children.append(
-                    dmc.Center(
-                        dmc.Text(f"{inputs[ElementsIDs.t_db_input.value]} {temp_unit}")
-                    )
-                )
-                results[0].children.append(
-                    dmc.Center(dmc.Text(f"{r_cooling_effect:.1f} {temp_unit}"))
-                )
-
-            for i in range(0, len(results)):
-                if i == 0:
-
-                    color = CompareInputColor.InputColor1.value
-                    for child in results[i].children[1:]:
-                        if isinstance(child, dmc.Center) and isinstance(
-                            child.children, dmc.Text
-                        ):
-                            child.children.style = {"color": color}
-
-            r_pmv_input2 = pmv_ppd(
-                tdb=inputs[ElementsIDs.t_db_input_input2.value],
-                tr=inputs[ElementsIDs.t_r_input_input2.value],
-                vr=v_relative(
-                    v=inputs[ElementsIDs.v_input_input2.value],
-                    met=inputs[ElementsIDs.met_input_input2.value],
-                ),
-                rh=inputs[ElementsIDs.rh_input_input2.value],
-                met=inputs[ElementsIDs.met_input_input2.value],
-                clo=clo_dynamic(
-                    clo=inputs[ElementsIDs.clo_input_input2.value],
-                    met=inputs[ElementsIDs.met_input_input2.value],
-                ),
-                wme=0,
-                limit_inputs=True,
-                units=units,
-                standard=standard,
-            )
-            r_set_tmp_input2 = set_tmp(
-                tdb=inputs[ElementsIDs.t_db_input_input2.value],
-                tr=inputs[ElementsIDs.t_r_input_input2.value],
-                v=v_relative(
-                    v=inputs[ElementsIDs.v_input_input2.value],
-                    met=inputs[ElementsIDs.met_input_input2.value],
-                ),
-                rh=inputs[ElementsIDs.rh_input_input2.value],
-                met=inputs[ElementsIDs.met_input_input2.value],
-                clo=clo_dynamic(
-                    clo=inputs[ElementsIDs.clo_input_input2.value],
-                    met=inputs[ElementsIDs.met_input_input2.value],
-                ),
-                wme=0,
-                limit_inputs=True,
-                units=units,
-                standard=standard,
+            results = create_result_stack(
+                r_pmv, r_set, r_cooling,
+                inputs[ElementsIDs.t_db_input.value],
+                units, CompareInputColor.InputColor1.value
             )
 
-            r_cooling_effect_input2 = cooling_effect(
-                tdb=inputs[ElementsIDs.t_db_input_input2.value],
-                tr=inputs[ElementsIDs.t_r_input_input2.value],
-                vr=v_relative(
-                    v=inputs[ElementsIDs.v_input_input2.value],
-                    met=inputs[ElementsIDs.met_input_input2.value],
-                ),
-                rh=inputs[ElementsIDs.rh_input_input2.value],
-                met=inputs[ElementsIDs.met_input_input2.value],
-                clo=clo_dynamic(
-                    clo=inputs[ElementsIDs.clo_input_input2.value],
-                    met=inputs[ElementsIDs.met_input_input2.value],
-                ),
-                wme=0,
-                units=units,
+            results2 = create_result_stack(
+                r_pmv2, r_set2, r_cooling2,
+                inputs[ElementsIDs.t_db_input_input2.value],
+                units, CompareInputColor.InputColor2.value
             )
 
-            if (
-                inputs[ElementsIDs.functionality_selection.value]
-                == Functionalities.Compare.value
-                and selected_model == Models.PMV_ashrae.name
-            ):
-                if -0.5 <= r_pmv_input2["pmv"] <= 0.5:
-                    compliance_text2 = "✔"
-                    compliance_color = "green"
-                else:
-                    compliance_text2 = "✘"
-                    compliance_color = "red"
-            else:  # EN
-                if -0.7 <= r_pmv_input2["pmv"] <= 0.7:
-                    compliance_text2 = "✔"
-                    compliance_color = "green"
-                else:
-                    compliance_text2 = "✘"
-                    compliance_color = "red"
-
-            # arrange the relative display of column2
-            results2 = [
-                dmc.Stack(
-                    children=[
-                        dmc.Center(
-                            dmc.Text(
-                                f"{compliance_text2}", style={"color": compliance_color}
-                            )
-                        ),
-                        dmc.Center(dmc.Text(f"{r_pmv_input2['pmv']:.2f}")),
-                        dmc.Center(dmc.Text(f"{r_pmv_input2['ppd']:.1f} %")),
-                    ],
-                    gap=5,
-                    style={"textAlign": "right", "width": "50%"},
-                ),
-            ]
-
-            results2[0].children.append(dmc.Center(dmc.Text(f"{comfort_category}")))
-
-            temp_unit = "°F" if units == UnitSystem.IP.value else "°C"
-            if units == UnitSystem.SI.value:
-
-                results2[0].children.append(
-                    dmc.Center(dmc.Text(f"{r_set_tmp_input2:.1f} {temp_unit}"))
-                )
-
-            else:
-
-                results2[0].children.append(
-                    dmc.Center(dmc.Text(f"{r_set_tmp_input2:.1f} {temp_unit}"))
-                )
-                results2[0].children.append(
-                    dmc.Center(
-                        dmc.Text(
-                            f"{inputs[ElementsIDs.t_db_input_input2.value]} {temp_unit}"
-                        )
-                    )
-                )
-                results2[0].children.append(
-                    dmc.Center(dmc.Text(f"{r_cooling_effect_input2:.1f} {temp_unit}"))
-                )
-
-            for i in range(0, len(results2)):
-                if i == 0:
-
-                    color = CompareInputColor.InputColor2.value
-                    for child in results2[i].children[1:]:
-                        if isinstance(child, dmc.Center) and isinstance(
-                            child.children, dmc.Text
-                        ):
-                            child.children.style = {"color": color}
-
-            # arrange the title column1 and column2 onto the same level
             return dmc.Grid(
                 children=[
-                    dmc.Stack(
-                        children=results_title,
-                        style={"flex": "1", "display": "inline-block"},
-                    ),
-                    dmc.Stack(
-                        children=results,
-                        style={"flex": "1", "display": "inline-block"},
-                    ),
-                    dmc.Stack(
-                        children=results2,
-                        style={"flex": "1", "display": "inline-block"},
-                    ),
+                    dmc.Stack(children=results_title, style={"flex": "1", "display": "inline-block"}),
+                    dmc.Stack(children=[results], style={"flex": "1", "display": "inline-block"}),
+                    dmc.Stack(children=[results2], style={"flex": "1", "display": "inline-block"}),
                 ],
                 style={"display": "flex"},
+            )
+        else:
+            r_pmv, r_set, r_cooling = calculate_pmv_results(inputs, False, units, standard)
+            comfort_category = get_comfort_category(r_pmv["pmv"], selected_model)
+            return dmc.Stack(
+                children=create_default_result(r_pmv, r_set, comfort_category, selected_model, units),
+                gap=0,
+                align="stretch",
             )
 
     elif selected_model == Models.Adaptive_EN.name:
@@ -428,7 +296,6 @@ def display_results(inputs: dict):
             v=inputs[ElementsIDs.v_input.value],
             units=units,
         )
-
     elif selected_model == Models.Adaptive_ASHRAE.name:
         results = gain_adaptive_ashare_hover_text(
             tdb=inputs[ElementsIDs.t_db_input.value],
@@ -439,11 +306,8 @@ def display_results(inputs: dict):
         )
 
     if selected_model == Models.PMV_ashrae.name:
-        if (
-            inputs[ElementsIDs.chart_selected.value] == Charts.set_outputs.value.name
-            or inputs[ElementsIDs.chart_selected.value]
-            == Charts.thl_psychrometric.value.name
-        ):
+        if (inputs[ElementsIDs.chart_selected.value] == Charts.set_outputs.value.name
+                or inputs[ElementsIDs.chart_selected.value] == Charts.thl_psychrometric.value.name):
             return None
 
     return dmc.Stack(
