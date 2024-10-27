@@ -25,7 +25,9 @@ def format_value_with_unit(value, units, has_decimals=True):
     return f"{format_str} {temp_unit}"
 
 
-def create_pmv_display_items(pmv_results, set_temperature, comfort_category=None, units=None):
+def create_pmv_display_items(
+    pmv_results, set_temperature, comfort_category=None, units=None
+):
     base_items = [
         ("PMV", f"{pmv_results['pmv']:.2f}"),
         ("PPD", f"{pmv_results['ppd']:.1f} %"),
@@ -35,8 +37,20 @@ def create_pmv_display_items(pmv_results, set_temperature, comfort_category=None
         base_items.append(("SET", format_value_with_unit(set_temperature, units)))
 
     if comfort_category is not None:
-        category_label = "Sensation" if comfort_category in ["Cold", "Cool", "Slightly Cool", "Neutral",
-                                                             "Slightly Warm", "Warm", "Hot"] else "Category"
+        category_label = (
+            "Sensation"
+            if comfort_category
+            in [
+                "Cold",
+                "Cool",
+                "Slightly Cool",
+                "Neutral",
+                "Slightly Warm",
+                "Warm",
+                "Hot",
+            ]
+            else "Category"
+        )
         base_items.append((category_label, comfort_category))
 
     return base_items
@@ -124,10 +138,7 @@ def create_compare_first_col(units):
     ]
 
     if units == UnitSystem.IP.value:
-        base_titles.extend([
-            "Dry-bulb temp at still air",
-            "Cooling effect"
-        ])
+        base_titles.extend(["Dry-bulb temp at still air", "Cooling effect"])
 
     return [
         dmc.Stack(
@@ -154,17 +165,21 @@ def get_comfort_category(pmv_value, model):
         )
     else:
         return mapping(
-            abs(pmv_value),
-            {0.2: "I", 0.5: "II", 0.7: "III", float("inf"): "IV"}
+            abs(pmv_value), {0.2: "I", 0.5: "II", 0.7: "III", float("inf"): "IV"}
         )
 
 
 def create_default_result(pmv_results, set_temperature, comfort_category, model, units):
     is_ashrae = model == Models.PMV_ashrae.name
-    compliance_text = "✔  Complies with " + ("ASHRAE Standard 55-2023" if is_ashrae else "EN-16798")
+    compliance_text = "✔  Complies with " + (
+        "ASHRAE Standard 55-2023" if is_ashrae else "EN-16798"
+    )
     if (is_ashrae and not (-0.5 <= pmv_results["pmv"] <= 0.5)) or (
-            not is_ashrae and not (-0.7 <= pmv_results["pmv"] <= 0.7)):
-        compliance_text = "✘  Does not comply with " + ("ASHRAE Standard 55-2023" if is_ashrae else "EN-16798")
+        not is_ashrae and not (-0.7 <= pmv_results["pmv"] <= 0.7)
+    ):
+        compliance_text = "✘  Does not comply with " + (
+            "ASHRAE Standard 55-2023" if is_ashrae else "EN-16798"
+        )
         compliance_color = "red"
     else:
         compliance_color = "green"
@@ -180,10 +195,7 @@ def create_default_result(pmv_results, set_temperature, comfort_category, model,
     grid_children = [
         create_text_component(f"{label}: {value}")
         for label, value in create_pmv_display_items(
-            pmv_results,
-            set_temperature,
-            comfort_category,
-            units if is_ashrae else None
+            pmv_results, set_temperature, comfort_category, units if is_ashrae else None
         )
     ]
 
@@ -204,7 +216,9 @@ def create_default_result(pmv_results, set_temperature, comfort_category, model,
     return results
 
 
-def create_result_stack(pmv_results, set_temperature, cooling_result, t_db, units, color):
+def create_result_stack(
+    pmv_results, set_temperature, cooling_result, t_db, units, color
+):
     comfort_category = mapping(
         pmv_results["pmv"],
         {
@@ -222,14 +236,18 @@ def create_result_stack(pmv_results, set_temperature, cooling_result, t_db, unit
 
     children = [create_text_component(compliance_text, compliance_color)]
 
-    display_items = create_pmv_display_items(pmv_results, set_temperature, comfort_category, units)
+    display_items = create_pmv_display_items(
+        pmv_results, set_temperature, comfort_category, units
+    )
     children.extend(create_text_component(value) for _, value in display_items)
 
     if units == UnitSystem.IP.value:
-        children.extend([
-            create_text_component(f"{t_db}"),
-            create_text_component(f"{cooling_result:.1f}")
-        ])
+        children.extend(
+            [
+                create_text_component(f"{t_db}"),
+                create_text_component(f"{cooling_result:.1f}"),
+            ]
+        )
 
     stack = dmc.Stack(
         children=children,
@@ -252,38 +270,64 @@ def display_results(inputs: dict):
     if selected_model in [Models.PMV_EN.name, Models.PMV_ashrae.name]:
         standard = "ashrae" if selected_model == Models.PMV_ashrae.name else "ISO"
 
-        if (inputs[ElementsIDs.functionality_selection.value] == Functionalities.Compare.value
-                and selected_model == Models.PMV_ashrae.name):
+        if (
+            inputs[ElementsIDs.functionality_selection.value]
+            == Functionalities.Compare.value
+            and selected_model == Models.PMV_ashrae.name
+        ):
 
             results_title = create_compare_first_col(units)
-            r_pmv, r_set, r_cooling = calculate_pmv_results(inputs, False, units, standard)
-            r_pmv2, r_set2, r_cooling2 = calculate_pmv_results(inputs, True, units, standard)
+            r_pmv, r_set, r_cooling = calculate_pmv_results(
+                inputs, False, units, standard
+            )
+            r_pmv2, r_set2, r_cooling2 = calculate_pmv_results(
+                inputs, True, units, standard
+            )
 
             results = create_result_stack(
-                r_pmv, r_set, r_cooling,
+                r_pmv,
+                r_set,
+                r_cooling,
                 inputs[ElementsIDs.t_db_input.value],
-                units, CompareInputColor.InputColor1.value
+                units,
+                CompareInputColor.InputColor1.value,
             )
 
             results2 = create_result_stack(
-                r_pmv2, r_set2, r_cooling2,
+                r_pmv2,
+                r_set2,
+                r_cooling2,
                 inputs[ElementsIDs.t_db_input_input2.value],
-                units, CompareInputColor.InputColor2.value
+                units,
+                CompareInputColor.InputColor2.value,
             )
 
             return dmc.Grid(
                 children=[
-                    dmc.Stack(children=results_title, style={"flex": "1", "display": "inline-block"}),
-                    dmc.Stack(children=[results], style={"flex": "1", "display": "inline-block"}),
-                    dmc.Stack(children=[results2], style={"flex": "1", "display": "inline-block"}),
+                    dmc.Stack(
+                        children=results_title,
+                        style={"flex": "1", "display": "inline-block"},
+                    ),
+                    dmc.Stack(
+                        children=[results],
+                        style={"flex": "1", "display": "inline-block"},
+                    ),
+                    dmc.Stack(
+                        children=[results2],
+                        style={"flex": "1", "display": "inline-block"},
+                    ),
                 ],
                 style={"display": "flex"},
             )
         else:
-            r_pmv, r_set, r_cooling = calculate_pmv_results(inputs, False, units, standard)
+            r_pmv, r_set, r_cooling = calculate_pmv_results(
+                inputs, False, units, standard
+            )
             comfort_category = get_comfort_category(r_pmv["pmv"], selected_model)
             return dmc.Stack(
-                children=create_default_result(r_pmv, r_set, comfort_category, selected_model, units),
+                children=create_default_result(
+                    r_pmv, r_set, comfort_category, selected_model, units
+                ),
                 gap=0,
                 align="stretch",
             )
@@ -306,8 +350,11 @@ def display_results(inputs: dict):
         )
 
     if selected_model == Models.PMV_ashrae.name:
-        if (inputs[ElementsIDs.chart_selected.value] == Charts.set_outputs.value.name
-                or inputs[ElementsIDs.chart_selected.value] == Charts.thl_psychrometric.value.name):
+        if (
+            inputs[ElementsIDs.chart_selected.value] == Charts.set_outputs.value.name
+            or inputs[ElementsIDs.chart_selected.value]
+            == Charts.thl_psychrometric.value.name
+        ):
             return None
 
     return dmc.Stack(
