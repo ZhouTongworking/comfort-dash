@@ -297,7 +297,7 @@ def display_results(inputs: dict):
             units=units,
         )
     elif selected_model == Models.Adaptive_ASHRAE.name:
-        results = e_hover_textrae_hover_text(
+        results = gain_adaptive_ashrae_hover_text(
             tdb=inputs[ElementsIDs.t_db_input.value],
             tr=inputs[ElementsIDs.t_r_input.value],
             trm=inputs[ElementsIDs.t_rm_input.value],
